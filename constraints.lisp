@@ -190,6 +190,12 @@
   (let ((v (make-array (length config))))
     (dotimes (i (length config) v)
       (setf (aref v i) (aref config i)))))
+(defun print-config (ns)
+  ;; a simple default printing
+  (format t "Node Values:~%"
+  (dolist (n ns)
+    (format t "Node ~A: ~A~%" (node-name n) (node-value n)))
+  (terpri)))
 
 (defun try-node-at (n v nodes-to-try)
   ;; make a copy of the values config, then set node n to be singleton of v
@@ -222,11 +228,12 @@
 			 (if res (return-from try-nodes res)))))))))
       nil))
 
-(defun solve-DFS (p &key evidence evidence-by-name)
+(defun solve-DFS (p &key evidence evidence-by-name (print-func #'print-config))
   ;; evidence is a list of (node . possibilities)
   ;; evidence-by-name is a list of (node-name . possibilities)
   ;; Returns a vector of singletons for the nodes if OK.
   ;; Returns nil if constraints cannot be satisfied.
+  ;; print-func is a function of the list of nodes, and it should print the node values nicely
   (let ((*cur-problem* p)
 	(*nodes-instance* (make-array (node-number p) :initial-element nil)))
     ;; initialize the possibilities of nodes
@@ -239,11 +246,22 @@
     (dolist (e evidence-by-name)
       (let ((n (node-by (car e))))
 	(setf (node-value-of n) (intersection (node-value n) (cdr e)))))
+    ;; print the initial puzzle first
+    (format t "Initial:~%")
+    (funcall print-func (problem-nodes *cur-problem*)) ;; the function is expected to take node values using node-value
+    (terpri)
     ;; initial propagation of constraints, simply update every node
     (dolist (n (problem-nodes *cur-problem*))
       (update-node n))
     ;; start DFS, using an initial order of nodes to try
-    (try-nodes *nodes-instance* (initial-order-to-try))))
+    (let ((res (try-nodes *nodes-instance* (initial-order-to-try))))
+      (cond (res (format t "After solving:~%")
+		 (let ((*nodes-instance* res))
+		   (funcall print-func (problem-nodes *cur-problem*))
+		   (terpri))
+		 res)
+	    (t (format t "Cannot solve the puzzle.~%")
+	       nil)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

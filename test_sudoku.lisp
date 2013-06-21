@@ -47,9 +47,34 @@
       (dotimes (j 9)
 	(let ((n (pop ns)))
 	  (if (/= n 0)
-	      (push `((cell ,i ,j) ,n))))))
+	      (push `((cell ,i ,j) ,n) e)))))
     e))
 
+(defun singleton-num (s)
+  (if (singleton? s)
+      (car s)
+      nil))
+(defun print-board (ns)
+  (declare (ignore ns))
+  (let ((sep1 "+---+---+---+")
+	(sep2 "+===+===+===+"))
+    (labels ((pr-sep (sp)
+	       (dotimes (i 3) (format t "~a" sp))
+	       (terpri))
+	     (pr-cell (n) (format t "| ~a " (if n n #\space)))
+	     (pr-row (i)
+	       (dotimes (j 9)
+		 (pr-cell (singleton-num (node-value (aref *classic-sudoku-nodes* i j))))
+		 (if (or (= j 2) (= j 5)) (format t "|")))
+	       (format t "|~%")))
+      ;;
+      (dotimes (i 9)
+	(pr-sep (if (= 0 (mod i 3)) sep2 sep1))
+	(pr-row i))
+      (pr-sep sep2))))
+
+(defun solve-sudoku-list (ns)
+  (solve-DFS *classic-sudoku* :evidence-by-name (list-to-evidence ns) :print-func #'print-board))
 ;;; Test problems
 ;;
 (defparameter *test-easy*
