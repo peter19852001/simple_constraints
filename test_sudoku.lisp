@@ -37,6 +37,23 @@
 	  (dotimes (j 3)
 	    (push (aref *classic-sudoku-nodes* (+ sq-x i) (+ sq-y j)) ns)))
 	(new-all-different ns)))))
+;;;
+(def-problem *squiggly-sudoku*
+  ;; 9x9 nodes, row by row
+  (def-nodes (x00 x01 x02 x03 x04 x05 x06 x07 x08
+	      x10 x11 x12 x13 x14 x15 x16 x17 x18
+	      x20 x21 x22 x23 x24 x25 x26 x27 x28
+
+	      x30 x31 x32 x33 x34 x35 x36 x37 x38
+	      x40 x41 x42 x43 x44 x45 x46 x47 x48
+	      x50 x51 x52 x53 x54 x55 x56 x57 x58
+
+	      x60 x61 x62 x63 x64 x65 x66 x67 x68
+	      x70 x71 x72 x73 x74 x75 x76 x77 x78
+	      x80 x81 x82 x83 x84 x85 x86 x87 x88)
+      '(1 2 3 4 5 6 7 8 9))
+  ;; constraints, irregular shapes
+  (all-different x00 
 
 ;;;
 (defun list-to-evidence (ns)
@@ -125,4 +142,16 @@
     0 0 4  0 0 0  1 0 0
     0 1 0  0 6 0  2 0 8
     0 0 0  5 0 0  0 9 0))
+(defparameter *test-very-hard*
+  '(0 0 0  0 0 4  1 0 6
+    0 2 0  9 0 1  0 0 0
+    0 0 0  0 6 0  7 0 0
+
+    0 7 0  0 8 6  2 0 0
+    0 0 2  0 0 0  5 0 0
+    0 0 5  3 9 0  0 1 0
+
+    0 0 3  0 2 0  0 0 0
+    0 0 0  8 0 9  0 3 0
+    8 0 9  4 0 0  0 0 0))
 ;;;
