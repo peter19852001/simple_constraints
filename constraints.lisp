@@ -17,6 +17,9 @@
 (defun singleton-in (x s)
   ;; singleton x in set s
   (member (car x) s))
+(defun singleton-value (s)
+  ;; assume s is singleton
+  (car s))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; main objects: node, constraint, problem
@@ -166,6 +169,99 @@
 (defmacro all-different (&rest names)
   `(new-all-different-by-name ',names))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; linear-sum constraint
+;;; a0*x0 + a1*x1 + ... + ak*xk = c
+;;; where ai and c are constants (any Lisp number), and xi are node names (variables)
+;;; The xi need not be distinct when creating the constraint (to allow more flexibility),
+;;;   but internally only the distinct variables are kept, and their coefficients are added together.
+;;;   Internally only variables with non-zero coefficients are kept.
+(defclass linear-sum-constraint (constraint)
+  ((coefficients :accessor coefficients :initarg :coefficients :initform nil)
+   (constant :accessor constant :initarg :constant :initform 0) ;; in the same order as nodes
+   ))
+
+(defmethod propagate-constraint ((c linear-sum-constraint) n)
+  ;; when all but one node has a single possibility, can determine the remaining one
+  (cond ((find-if #'null (nodes c) :key #'node-value) nil)
+	((singleton? (node-value n))
+	 (let* ((unknown-n1 (position-if-not #'singleton? (nodes c) :key #'node-value))
+		(unknown-n2 (position-if-not #'singleton? (nodes c) :key #'node-value :start (1+ unknown-n1)))
+		(should-be ;; the value of the remaining node. nil if still not determined or no need to determine any
+		 (if (or (null unknown-n1) unknown-n2) ;; either all known, or more than one unknown
+		     nil
+		     (do ((sum (constant c) (- sum (* (car cs) (singleton-value (node-value (car ns))))))
+			  (ns (nodes c) (cdr ns))
+			  (cs (coefficients c) (cdr cs))
+			  (i 0 (1+ i)))
+			 ((or (null ns) (null cs))
+			  (/ sum (nth unknown-n1 (coefficients c))))))))
+	   (or (null should-be)
+	       (let ((unknown-node (nth unknown-n1 (nodes c))))
+		 (and (member should-be (node-value unknown-node))
+		      (node-set-value unknown-node should-be))))))
+	(t t)))
+
+(defmethod constraint-satisfied ((c linear-sum-constraint))
+  (do ((sum 0 (+ sum (* (car cs) (singleton-value (node-value (car ns))))))
+       (ns (nodes c) (cdr ns))
+       (cs (coefficients c) (cdr cs)))
+      ((or (null ns) (null cs))
+       (= sum (constant c)))
+    (let ((nv (node-value (car ns))))
+      (cond ((empty? nv) (return-from constraint-satisfied nil))
+	    ((not (singleton? nv))
+	     (return-from constraint-satisfied t))))))
+
+(defun new-linear-sum-by-name (names &key (coefficients (mapcar #'(lambda (x) (declare (ignore x)) 1) vars)) (constant 0))
+  ;; names are list of node names
+  ;; names may have duplicates, need to add their coefficients.
+  ;; and zero (combined) coefficients will be discarded together with the variable
+  (let ((h (make-hash-table :test 'equal))
+	(ns nil)
+	(coefs nil))
+    (do ((vs names (cdr vs))
+	 (cs coefficients (cdr cs)))
+	((null vs))
+      (incf (gethash (car vs) h 0) (if cs (car cs) 1)))
+    ;;
+    (maphash #'(lambda (k v)
+		 (when (/= v 0)
+		   (push k ns)
+		   (push v coefs)))
+	     h)
+    (add-constraint (make-instance 'linear-sum-constraint
+				   :constant constant
+				   :coefficients coefs
+				   :nodes (mapcar #'node-by ns)))))
+
+(defmacro linear-sum (&rest terms)
+  ;; E.g. (linear-sum x0 (* k1 x1) :to x2 :consts 2 3) means x0 + k1*x1 = x2 + 2 + 3
+  ;; The :to is optional. If not provided, all monomials are on the left hand side, but the constant is always on the right hand side
+  ;; anything before :consts are a monomial, which describe ai*xi
+  ;; anything after :consts should be constants and will be summed up, this is the expected sum
+  ;; Each term before :consts and not :to can be one of
+  ;;  1. (- node-name), equivalent to (* 1 node-name)
+  ;;  2. (* k node-name), k is the coefficient
+  ;;  3. node-name, where the node-name is not confused with the above two cases
+  (flet ((normalize-terms (ts coef)
+	   (mapcar #'(lambda (x)
+			   (if (consp x)
+			       (cond ((eq '- (car x)) `(* ,(- coef) ,(second x)))
+				     ((eq '* (car x)) `(* ,(* coef (second x)) ,(third x)))
+				     (t `(* ,coef ,x)))
+			       `(* ,coef ,x)))
+		   ts)))
+    (let* ((p (position :consts terms))
+	   (ts (subseq terms 0 p))
+	   (p-to (position :to ts))
+	   (LHS (normalize-terms (subseq ts 0 p-to) 1))
+	   (RHS (normalize-terms (if p-to (subseq ts (1+ p-to))) -1))
+	   (vars (append LHS RHS))
+	   (consts (if p (subseq terms (1+ p)) nil)))
+    `(new-linear-sum-by-name ',(mapcar #'third vars)
+			     :coefficients ',(mapcar #'second vars)
+			     :constant ,(if consts `(reduce #'+ ',consts :initial-value 0) 0)))))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Solver using simple depth first search
 (defun initial-order-to-try (&optional (ns (problem-nodes *cur-problem*)))
