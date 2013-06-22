@@ -192,10 +192,10 @@
       (setf (aref v i) (aref config i)))))
 (defun print-config (ns)
   ;; a simple default printing
-  (format t "Node Values:~%"
+  (format t "Node Values:~%")
   (dolist (n ns)
     (format t "Node ~A: ~A~%" (node-name n) (node-value n)))
-  (terpri)))
+  (terpri))
 
 (defun try-node-at (n v nodes-to-try)
   ;; make a copy of the values config, then set node n to be singleton of v

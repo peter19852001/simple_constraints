@@ -37,23 +37,19 @@
 	  (dotimes (j 3)
 	    (push (aref *classic-sudoku-nodes* (+ sq-x i) (+ sq-y j)) ns)))
 	(new-all-different ns)))))
-;;;
-(def-problem *squiggly-sudoku*
-  ;; 9x9 nodes, row by row
-  (def-nodes (x00 x01 x02 x03 x04 x05 x06 x07 x08
-	      x10 x11 x12 x13 x14 x15 x16 x17 x18
-	      x20 x21 x22 x23 x24 x25 x26 x27 x28
-
-	      x30 x31 x32 x33 x34 x35 x36 x37 x38
-	      x40 x41 x42 x43 x44 x45 x46 x47 x48
-	      x50 x51 x52 x53 x54 x55 x56 x57 x58
-
-	      x60 x61 x62 x63 x64 x65 x66 x67 x68
-	      x70 x71 x72 x73 x74 x75 x76 x77 x78
-	      x80 x81 x82 x83 x84 x85 x86 x87 x88)
-      '(1 2 3 4 5 6 7 8 9))
-  ;; constraints, irregular shapes
-  (all-different x00 
+;;; more irregular shaped sudoku
+(defun list-to-regions (ns)
+  ;; ns is a list of number that give region number to each cell in the 9x9 board, in row by row order.
+  ;; returns a list of list of cell names that belong to the same group.
+  (let ((h (make-hash-table))
+	(r nil))
+    (dotimes (i 9)
+      (dotimes (j 9)
+	(let ((n (pop ns)))
+	  (push (list 'cell i j) (gethash n h)))))
+    ;;
+    (maphash #'(lambda (k v) (declare (ignore k)) (push v r)) h)
+    r))
 
 ;;;
 (defun list-to-evidence (ns)
@@ -81,7 +77,7 @@
 	     (pr-cell (n) (format t "| ~a " (if n n #\space)))
 	     (pr-row (i)
 	       (dotimes (j 9)
-		 (pr-cell (singleton-num (node-value (aref *classic-sudoku-nodes* i j))))
+		 (pr-cell (singleton-num (node-value (node-by (list 'cell i j)))))
 		 (if (or (= j 2) (= j 5)) (format t "|")))
 	       (format t "|~%")))
       ;;
@@ -92,6 +88,25 @@
 
 (defun solve-sudoku-list (ns)
   (solve-DFS *classic-sudoku* :evidence-by-name (list-to-evidence ns) :print-func #'print-board))
+
+(defun solve-irregular-sudoku-list (ns gs)
+  ;; ns gives the initial config, gs gives the regions
+  (let ((p (with-new-problem irregular-sudoku
+	     ;; 9x9 nodes, row by row
+	     (dotimes (i 9)
+	       (dotimes (j 9)
+		 (new-node (list 'cell i j) :in '(1 2 3 4 5 6 7 8 9))))
+	     ;; constraints
+	     ;; row
+	     (dotimes (i 9)
+	       (new-all-different-by-name (loop for j from 0 to 8 collect (list 'cell i j))))
+	     ;; column
+	     (dotimes (j 9)
+	       (new-all-different-by-name (loop for i from 0 to 8 collect (list 'cell i j))))
+	     ;; cells in each region should be distinct
+	     (dolist (g (list-to-regions gs))
+	       (new-all-different-by-name g)))))
+    (solve-DFS p :evidence-by-name (list-to-evidence ns) :print-func #'print-board)))
 ;;; Test problems
 ;;
 (defparameter *test-easy*
@@ -154,4 +169,136 @@
     0 0 3  0 2 0  0 0 0
     0 0 0  8 0 9  0 3 0
     8 0 9  4 0 0  0 0 0))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; squiggly-sudoku testing instances
+;; easy
+; http://www.dailysudoku.com/sudoku/archive.shtml?year=2013&month=06&day=21&type=squiggly
+(defparameter *test-squiggly-easy*
+  '(0 0 2  0 0 0  0 0 3
+    5 0 6  0 0 0  8 9 0
+    0 0 9  3 0 0  0 4 6
+
+    0 0 0  4 0 3  0 0 2
+    2 0 0  5 8 7  0 0 9
+    1 0 0  6 0 8  0 0 0
+
+    4 8 0  0 0 6  2 0 0
+    0 2 1  0 0 0  6 0 8
+    6 0 0  0 0 0  3 0 0))
+(defparameter *test-squiggly-g-easy*
+  '(0 0 0  0 1 1  1 2 2
+    0 0 0  0 1 1  1 2 2
+    3 3 0  1 1 4  2 2 2
+
+    3 3 3  3 1 4  4 2 2
+    3 3 3  4 4 4  5 5 5
+    6 6 4  4 7 5  5 5 5
+
+    6 6 6  4 7 7  8 5 5
+    6 6 7  7 7 8  8 8 8
+    6 6 7  7 7 8  8 8 8))
+;; medium
+; http://www.dailysudoku.com/sudoku/archive.shtml?year=2013&month=06&day=6&type=squiggly
+(defparameter *test-squiggly-medium*
+  '(0 0 0  0 0 3  0 0 1
+    0 0 0  0 0 9  0 0 0
+    0 6 5  0 0 0  0 0 0
+
+    0 1 3  0 0 2  0 0 0
+    5 4 0  8 0 1  0 3 9
+    0 0 0  5 0 0  7 1 0
+
+    0 0 0  0 0 0  5 4 0
+    0 0 0  3 0 0  0 0 0
+    7 0 0  9 0 0  0 0 0))
+(defparameter *test-squiggly-g-medium*
+  '(0 0 1  1 1 1  1 2 2
+    0 0 0  1 1 1  2 2 2
+    7 0 0  0 1 2  2 2 3
+
+    7 7 0  8 8 8  2 3 3
+    7 7 7  8 8 8  3 3 3
+    7 7 6  8 8 8  4 3 3
+
+    7 6 6  6 5 4  4 4 3
+    6 6 6  5 5 5  4 4 4
+    6 6 5  5 5 5  5 4 4))
+;; hard
+; http://www.dailysudoku.com/sudoku/archive.shtml?year=2013&month=06&day=5&type=squiggly
+(defparameter *test-squiggly-hard*
+  '(4 0 0  0 1 0  3 0 0
+    0 0 0  0 0 0  0 9 0
+    0 0 8  0 0 0  6 0 5
+
+    0 8 0  0 0 9  0 0 0
+    3 9 0  8 0 6  0 4 2
+    0 0 0  5 0 0  0 8 0
+
+    9 0 4  0 0 0  1 0 0
+    0 2 0  0 0 0  0 0 0
+    0 0 6  0 5 0  0 0 9))
+(defparameter *test-squiggly-g-hard*
+  '(0 0 0  0 1 1  1 2 2
+    0 0 0  1 1 1  2 2 2
+    3 0 0  1 1 1  2 2 2
+
+    3 3 3  4 4 4  2 5 5
+    3 3 3  4 4 4  5 5 5
+    3 3 6  4 4 4  5 5 5
+
+    6 6 6  7 7 7  8 8 5
+    6 6 6  7 7 7  8 8 8
+    6 6 7  7 7 8  8 8 8))
+;; very hard
+; http://www.dailysudoku.com/sudoku/archive.shtml?year=2013&month=06&day=22&type=squiggly
+(defparameter *test-squiggly-very-hard*
+  '(0 9 1  0 0 8  0 0 0
+    0 0 0  0 7 0  0 0 0
+    0 0 0  4 0 0  5 0 9
+
+    0 0 0  0 0 0  0 1 0
+    6 7 0  0 0 0  0 4 1
+    0 4 0  0 0 0  0 0 0
+
+    3 0 7  0 0 5  0 0 0
+    0 0 0  0 4 0  0 0 0
+    0 0 0  1 0 0  6 8 0))
+(defparameter *test-squiggly-g-very-hard*
+  '(0 1 1  1 2 2  2 2 2
+    0 0 1  1 1 2  2 2 5
+    0 0 0  1 1 1  2 5 5
+
+    0 0 3  4 4 4  5 5 5
+    0 3 3  4 4 4  5 5 8
+    3 3 3  4 4 4  5 8 8
+
+    3 3 6  7 7 7  8 8 8
+    3 6 6  6 7 7  7 8 8
+    6 6 6  6 6 7  7 7 8))
+;;
+;; 
+(defparameter *test-squiggly*
+  '(0 0 0  0 0 0  0 0 0
+    0 0 0  0 0 0  0 0 0
+    0 0 0  0 0 0  0 0 0
+
+    0 0 0  0 0 0  0 0 0
+    0 0 0  0 0 0  0 0 0
+    0 0 0  0 0 0  0 0 0
+
+    0 0 0  0 0 0  0 0 0
+    0 0 0  0 0 0  0 0 0
+    0 0 0  0 0 0  0 0 0))
+(defparameter *test-squiggly*
+  '(0 0 0  0 0 0  0 0 0
+    0 0 0  0 0 0  0 0 0
+    0 0 0  0 0 0  0 0 0
+
+    0 0 0  0 0 0  0 0 0
+    0 0 0  0 0 0  0 0 0
+    0 0 0  0 0 0  0 0 0
+
+    0 0 0  0 0 0  0 0 0
+    0 0 0  0 0 0  0 0 0
+    0 0 0  0 0 0  0 0 0))
 ;;;
