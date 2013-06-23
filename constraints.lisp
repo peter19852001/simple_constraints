@@ -186,11 +186,14 @@
   (cond ((find-if #'null (nodes c) :key #'node-value) nil)
 	((singleton? (node-value n))
 	 (let* ((unknown-n1 (position-if-not #'singleton? (nodes c) :key #'node-value))
-		(unknown-n2 (position-if-not #'singleton? (nodes c) :key #'node-value :start (1+ unknown-n1)))
+		(unknown-n2 (if unknown-n1
+				(position-if-not #'singleton? (nodes c) :key #'node-value :start (1+ unknown-n1))))
 		(should-be ;; the value of the remaining node. nil if still not determined or no need to determine any
 		 (if (or (null unknown-n1) unknown-n2) ;; either all known, or more than one unknown
 		     nil
-		     (do ((sum (constant c) (- sum (* (car cs) (singleton-value (node-value (car ns))))))
+		     (do ((sum (constant c) (if (= i unknown-n1)
+						sum
+						(- sum (* (car cs) (singleton-value (node-value (car ns)))))))
 			  (ns (nodes c) (cdr ns))
 			  (cs (coefficients c) (cdr cs))
 			  (i 0 (1+ i)))
@@ -213,7 +216,7 @@
 	    ((not (singleton? nv))
 	     (return-from constraint-satisfied t))))))
 
-(defun new-linear-sum-by-name (names &key (coefficients (mapcar #'(lambda (x) (declare (ignore x)) 1) vars)) (constant 0))
+(defun new-linear-sum-by-name (names &key (coefficients (mapcar #'(lambda (x) (declare (ignore x)) 1) names)) (constant 0))
   ;; names are list of node names
   ;; names may have duplicates, need to add their coefficients.
   ;; and zero (combined) coefficients will be discarded together with the variable

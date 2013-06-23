@@ -21,7 +21,8 @@
 (def-problem *send-more-money*
   ;; SEND + MORE = MONEY
   (def-nodes (S E N D O R Y) :in '(0 1 2 3 4 5 6 7 8 9))
-  (def-nodes (c1 c2 c3 M) :in '(0 1))
+  (def-nodes (c1 c2 c3) :in '(0 1))
+  (def-node M :in '(1 2 3 4 5 6 7 8 9))
   ;; constraints
   (linear-sum D E    :to (* 10 c1) Y)
   (linear-sum N R c1 :to (* 10 c2) E)
