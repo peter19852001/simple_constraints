@@ -233,6 +233,7 @@
 		   (push k ns)
 		   (push v coefs)))
 	     h)
+    ;;(format t "linear-sum:~% constant:~A~% coefs:~A~% names:~A~%~%" constant coefs ns)
     (add-constraint (make-instance 'linear-sum-constraint
 				   :constant constant
 				   :coefficients coefs
