@@ -38,12 +38,20 @@
   node-names   ;; hash table mapping node name to node structure, node names are compared with equal
   )
 
+;;
+(defstruct node
+  id            ;; a 0-based number to identify the node in a particular problem
+  name          ;; can be any object, e.g. a symbol, a number, a list (arr 10). Equality of name is compared with equal
+  choices       ;; all the possibilities, i.e. the domain of the variable. The values are compared with eql.
+  constraints   ;; the list of constraints that this node is involved in
+  )
+
 (defvar *cur-problem* nil
   "The current problem, used in creating problem and solving them.")
 
 (defun new-problem (name)
   (make-problem :name name :nodes nil :constraints nil
-		:cur-id 0 :node-names (make-hash-table :test 'equal)))
+                :cur-id 0 :node-names (make-hash-table :test 'equal)))
 
 (defun node-number (&optional (p *cur-problem*))
   (length (problem-nodes p)))
@@ -71,13 +79,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
-(defstruct node
-  id            ;; a 0-based number to identify the node in a particular problem
-  name          ;; can be any object, e.g. a symbol, a number, a list (arr 10). Equality of name is compared with equal
-  choices       ;; all the possibilities, i.e. the domain of the variable. The values are compared with eql.
-  constraints   ;; the list of constraints that this node is involved in
-  )
-
 (defun new-node (name &key in)
   (add-node (make-node :id (next-node-id) :name name :choices in :constraints nil)))
 
@@ -87,8 +88,8 @@
   (let ((in-choices (gensym)))
     `(let ((,in-choices ,in))
        ,@(mapcar #'(lambda (name)
-		     `(def-node ,name :in ,in-choices))
-		 names))))
+                     `(def-node ,name :in ,in-choices))
+                 names))))
 
 (defun node-add-constraint (n c)
   (push c (node-constraints n)))
@@ -96,7 +97,7 @@
   ;; the possible values of node n have been updated, need to check its related constraints to propagate the changes
   (dolist (c (node-constraints n) t)
     (if (null (propagate-constraint c n))
-	(return-from update-node nil))))
+        (return-from update-node nil))))
 
 (defvar *nodes-instance* nil
   "Will be set to a vector in solving a problem. Each slot in the vector corresponds to the set of possible values of a node at the time.")
@@ -111,7 +112,7 @@
   ;; If the set of choices is changed, trigger constraint propagation.
   ;; Returns the newest possible choices after constraint propagation.
   (let* ((old-v (node-value n))
-	 (new-v (setf (node-value-of n) (set-difference old-v choices-to-remove))))
+         (new-v (setf (node-value-of n) (set-difference old-v choices-to-remove))))
     (unless (equal old-v new-v)
       (update-node n))
     ;; the values may have been changed during constraint propagation
@@ -144,21 +145,21 @@
 (defmethod propagate-constraint ((c all-different-constraint) n)
   (if (singleton? (node-value n))
       (dolist (neighbor (nodes c) t)
-	(unless (equal neighbor n)
-	  ;; each time get the newest choices of node n, because it might have been updated
-	  (if (null (node-reduce-choice neighbor (node-value n)))
-	      (return-from propagate-constraint nil))))
+        (unless (equal neighbor n)
+          ;; each time get the newest choices of node n, because it might have been updated
+          (if (null (node-reduce-choice neighbor (node-value n)))
+              (return-from propagate-constraint nil))))
       t))
 (defmethod constraint-satisfied ((c all-different-constraint))
   ;; all nodes with single values should be distinct
   (let ((r (empty-set)))
     (dolist (n (nodes c) t)
       (let ((nv (node-value n)))
-	(cond ((empty? nv) (return-from constraint-satisfied nil))
-	      ((singleton? nv)
-	       (if (singleton-in nv r)
-		   (return-from constraint-satisfied nil)
-		   (setf r (union nv r)))))))))
+        (cond ((empty? nv) (return-from constraint-satisfied nil))
+              ((singleton? nv)
+               (if (singleton-in nv r)
+                   (return-from constraint-satisfied nil)
+                   (setf r (union nv r)))))))))
 
 (defun new-all-different (ns)
   ;; ns is a list of nodes
@@ -184,26 +185,26 @@
 (defmethod propagate-constraint ((c linear-sum-constraint) n)
   ;; when all but one node has a single possibility, can determine the remaining one
   (cond ((find-if #'null (nodes c) :key #'node-value) nil)
-	((singleton? (node-value n))
-	 (let* ((unknown-n1 (position-if-not #'singleton? (nodes c) :key #'node-value))
-		(unknown-n2 (if unknown-n1
-				(position-if-not #'singleton? (nodes c) :key #'node-value :start (1+ unknown-n1))))
-		(should-be ;; the value of the remaining node. nil if still not determined or no need to determine any
-		 (if (or (null unknown-n1) unknown-n2) ;; either all known, or more than one unknown
-		     nil
-		     (do ((sum (constant c) (if (= i unknown-n1)
-						sum
-						(- sum (* (car cs) (singleton-value (node-value (car ns)))))))
-			  (ns (nodes c) (cdr ns))
-			  (cs (coefficients c) (cdr cs))
-			  (i 0 (1+ i)))
-			 ((or (null ns) (null cs))
-			  (/ sum (nth unknown-n1 (coefficients c))))))))
-	   (or (null should-be)
-	       (let ((unknown-node (nth unknown-n1 (nodes c))))
-		 (and (member should-be (node-value unknown-node))
-		      (node-set-value unknown-node should-be))))))
-	(t t)))
+        ((singleton? (node-value n))
+         (let* ((unknown-n1 (position-if-not #'singleton? (nodes c) :key #'node-value))
+                (unknown-n2 (if unknown-n1
+                                (position-if-not #'singleton? (nodes c) :key #'node-value :start (1+ unknown-n1))))
+                (should-be ;; the value of the remaining node. nil if still not determined or no need to determine any
+                 (if (or (null unknown-n1) unknown-n2) ;; either all known, or more than one unknown
+                     nil
+                     (do ((sum (constant c) (if (= i unknown-n1)
+                                                sum
+                                                (- sum (* (car cs) (singleton-value (node-value (car ns)))))))
+                          (ns (nodes c) (cdr ns))
+                          (cs (coefficients c) (cdr cs))
+                          (i 0 (1+ i)))
+                         ((or (null ns) (null cs))
+                          (/ sum (nth unknown-n1 (coefficients c))))))))
+           (or (null should-be)
+               (let ((unknown-node (nth unknown-n1 (nodes c))))
+                 (and (member should-be (node-value unknown-node))
+                      (node-set-value unknown-node should-be))))))
+        (t t)))
 
 (defmethod constraint-satisfied ((c linear-sum-constraint))
   (do ((sum 0 (+ sum (* (car cs) (singleton-value (node-value (car ns))))))
@@ -213,31 +214,31 @@
        (= sum (constant c)))
     (let ((nv (node-value (car ns))))
       (cond ((empty? nv) (return-from constraint-satisfied nil))
-	    ((not (singleton? nv))
-	     (return-from constraint-satisfied t))))))
+            ((not (singleton? nv))
+             (return-from constraint-satisfied t))))))
 
 (defun new-linear-sum-by-name (names &key (coefficients (mapcar #'(lambda (x) (declare (ignore x)) 1) names)) (constant 0))
   ;; names are list of node names
   ;; names may have duplicates, need to add their coefficients.
   ;; and zero (combined) coefficients will be discarded together with the variable
   (let ((h (make-hash-table :test 'equal))
-	(ns nil)
-	(coefs nil))
+        (ns nil)
+        (coefs nil))
     (do ((vs names (cdr vs))
-	 (cs coefficients (cdr cs)))
-	((null vs))
+         (cs coefficients (cdr cs)))
+        ((null vs))
       (incf (gethash (car vs) h 0) (if cs (car cs) 1)))
     ;;
     (maphash #'(lambda (k v)
-		 (when (/= v 0)
-		   (push k ns)
-		   (push v coefs)))
-	     h)
+                 (when (/= v 0)
+                   (push k ns)
+                   (push v coefs)))
+             h)
     ;;(format t "linear-sum:~% constant:~A~% coefs:~A~% names:~A~%~%" constant coefs ns)
     (add-constraint (make-instance 'linear-sum-constraint
-				   :constant constant
-				   :coefficients coefs
-				   :nodes (mapcar #'node-by ns)))))
+                                   :constant constant
+                                   :coefficients coefs
+                                   :nodes (mapcar #'node-by ns)))))
 
 (defmacro linear-sum (&rest terms)
   ;; E.g. (linear-sum x0 (* k1 x1) :to x2 :consts 2 3) means x0 + k1*x1 = x2 + 2 + 3
@@ -245,47 +246,47 @@
   ;; anything before :consts are a monomial, which describe ai*xi
   ;; anything after :consts should be constants and will be summed up, this is the expected sum
   ;; Each term before :consts and not :to can be one of
-  ;;  1. (- node-name), equivalent to (* 1 node-name)
+  ;;  1. (- node-name), equivalent to (* -1 node-name)
   ;;  2. (* k node-name), k is the coefficient
   ;;  3. node-name, where the node-name is not confused with the above two cases
   (flet ((normalize-terms (ts coef)
-	   (mapcar #'(lambda (x)
-			   (if (consp x)
-			       (cond ((eq '- (car x)) `(* ,(- coef) ,(second x)))
-				     ((eq '* (car x)) `(* ,(* coef (second x)) ,(third x)))
-				     (t `(* ,coef ,x)))
-			       `(* ,coef ,x)))
-		   ts)))
+           (mapcar #'(lambda (x)
+                       (if (consp x)
+                           (cond ((eq '- (car x)) `(* ,(- coef) ,(second x)))
+                                 ((eq '* (car x)) `(* ,(* coef (second x)) ,(third x)))
+                                 (t `(* ,coef ,x)))
+                           `(* ,coef ,x)))
+                   ts)))
     (let* ((p (position :consts terms))
-	   (ts (subseq terms 0 p))
-	   (p-to (position :to ts))
-	   (LHS (normalize-terms (subseq ts 0 p-to) 1))
-	   (RHS (normalize-terms (if p-to (subseq ts (1+ p-to))) -1))
-	   (vars (append LHS RHS))
-	   (consts (if p (subseq terms (1+ p)) nil)))
-    `(new-linear-sum-by-name ',(mapcar #'third vars)
-			     :coefficients ',(mapcar #'second vars)
-			     :constant ,(if consts `(reduce #'+ ',consts :initial-value 0) 0)))))
+           (ts (subseq terms 0 p))
+           (p-to (position :to ts))
+           (LHS (normalize-terms (subseq ts 0 p-to) 1))
+           (RHS (normalize-terms (if p-to (subseq ts (1+ p-to))) -1))
+           (vars (append LHS RHS))
+           (consts (if p (subseq terms (1+ p)) nil)))
+      `(new-linear-sum-by-name ',(mapcar #'third vars)
+                               :coefficients ',(mapcar #'second vars)
+                               :constant ,(if consts `(reduce #'+ ',consts :initial-value 0) 0)))))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Solver using simple depth first search
 (defun initial-order-to-try (&optional (ns (problem-nodes *cur-problem*)))
   (sort (mapcar #'(lambda (n) (cons n (set-size (node-value n))))
-		ns)
-	#'<
-	:key #'cdr))
+                ns)
+        #'<
+        :key #'cdr))
 
 (defun valid-config ()
   ;; returns 'complete if valid and all nodes have a single value
   ;; returns 'valid if valid but not all nodes have known value
   ;; returns nil if invalid
   (dolist (c (problem-constraints *cur-problem*)
-	   (if (every #'(lambda (n)
-			  (singleton? (node-value n)))
-		      (problem-nodes *cur-problem*))
-	       'complete
-	       'valid))
+           (if (every #'(lambda (n)
+                          (singleton? (node-value n)))
+                      (problem-nodes *cur-problem*))
+               'complete
+               'valid))
     (if (not (constraint-satisfied c))
-	(return-from valid-config nil))))
+        (return-from valid-config nil))))
 (defun copy-config (&optional (config *nodes-instance*))
   (let ((v (make-array (length config))))
     (dotimes (i (length config) v)
@@ -300,32 +301,32 @@
 (defun try-node-at (n v nodes-to-try)
   ;; make a copy of the values config, then set node n to be singleton of v
   (let* ((*nodes-instance* (copy-config))
-	 (ok (node-set-value n v)))
+         (ok (node-set-value n v)))
     (if ok (try-nodes *nodes-instance* nodes-to-try) nil)))
 
 (defmacro get-next-node-to-try (ns)
   ;; only get singleton
   (let ((pos (gensym))
-	(tmp (gensym)))
+        (tmp (gensym)))
     `(let ((,pos (position-if-not #'(lambda (x) (singleton? (node-value (car x)))) ,ns)))
        (if ,pos
-	   (let ((,tmp (nthcdr ,pos ,ns)))
-	     (setf ,ns (cdr ,tmp))
-	     (car ,tmp))
-	   nil))))
+           (let ((,tmp (nthcdr ,pos ,ns)))
+             (setf ,ns (cdr ,tmp))
+             (car ,tmp))
+           nil))))
 (defun try-nodes (*nodes-instance* nodes-to-try)
   ;; nodes-to-try is in the form as returned by initial-order-to-try, i.e. list of (node . size)
   (if nodes-to-try
       (let ((state (valid-config)))
-	(cond ((null state) nil)
-	      ((eq state 'complete) *nodes-instance*)
-	      (t ;; valid but not complete
-	       (let ((n (get-next-node-to-try nodes-to-try)))
-		 (if (null n)
-		     (return-from try-nodes nil)
-		     (dolist (v (node-value (car n)) nil)
-		       (let ((res (try-node-at (car n) v nodes-to-try)))
-			 (if res (return-from try-nodes res)))))))))
+        (cond ((null state) nil)
+              ((eq state 'complete) *nodes-instance*)
+              (t ;; valid but not complete
+               (let ((n (get-next-node-to-try nodes-to-try)))
+                 (if (null n)
+                     (return-from try-nodes nil)
+                     (dolist (v (node-value (car n)) nil)
+                       (let ((res (try-node-at (car n) v nodes-to-try)))
+                         (if res (return-from try-nodes res)))))))))
       nil))
 
 (defun solve-DFS (p &key evidence evidence-by-name (print-func #'print-config))
@@ -335,17 +336,17 @@
   ;; Returns nil if constraints cannot be satisfied.
   ;; print-func is a function of the list of nodes, and it should print the node values nicely
   (let ((*cur-problem* p)
-	(*nodes-instance* (make-array (node-number p) :initial-element nil)))
+        (*nodes-instance* (make-array (node-number p) :initial-element nil)))
     ;; initialize the possibilities of nodes
     (dolist (n (problem-nodes *cur-problem*))
       (setf (node-value-of n) (node-choices n)))
     ;; add in the initial evidence
     (dolist (e evidence)
       (let ((n (car e)))
-	(setf (node-value-of n) (intersection (node-value n) (cdr e)))))
+        (setf (node-value-of n) (intersection (node-value n) (cdr e)))))
     (dolist (e evidence-by-name)
       (let ((n (node-by (car e))))
-	(setf (node-value-of n) (intersection (node-value n) (cdr e)))))
+        (setf (node-value-of n) (intersection (node-value n) (cdr e)))))
     ;; print the initial puzzle first
     (format t "Initial:~%")
     (funcall print-func (problem-nodes *cur-problem*)) ;; the function is expected to take node values using node-value
@@ -356,12 +357,12 @@
     ;; start DFS, using an initial order of nodes to try
     (let ((res (try-nodes *nodes-instance* (initial-order-to-try))))
       (cond (res (format t "After solving:~%")
-		 (let ((*nodes-instance* res))
-		   (funcall print-func (problem-nodes *cur-problem*))
-		   (terpri))
-		 res)
-	    (t (format t "Cannot solve the puzzle.~%")
-	       nil)))))
+                 (let ((*nodes-instance* res))
+                   (funcall print-func (problem-nodes *cur-problem*))
+                   (terpri))
+                 res)
+            (t (format t "Cannot solve the puzzle.~%")
+               nil)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
